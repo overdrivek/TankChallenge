@@ -10,6 +10,7 @@ class Actions:
         self.wait_count = 0
         self.previous_explore_turn = self.actions['Forward']
         self.check_threat = False
+        self.check_threat_distance = -1
         
     def update(self,scan_distaces,previous_distance):
         self.scan_distaces = scan_distaces
@@ -58,7 +59,6 @@ class Actions:
             print('Right : ',0)
             return 0
                 
-    
     def ActionForwards(self):
         if self.scan_distaces[self.directions['Front']] > 1:
             print(self.scan_distaces)
@@ -98,40 +98,50 @@ class Actions:
                     if side<max_value and side > 0:
                         min_direction = i
                 print('min direction ',min_direction) 
-                
-                if diff_sides[min_direction] > 0: # a shortening of distance has took place
+                print('diff_sides[min_direction] = ',diff_sides[min_direction])
+                if diff_sides[min_direction] > -2 and diff_sides[min_direction] != 0: #or diff_sides[min_direction] > -2: # a shortening of distance has took place or # a slight enlargement has happened...found a corridor?
                     if min_direction == 0:
                         self.final_action = self.actions['Left']
                         print('exp:turn left')
                         self.previous_explore_turn = self.final_action
                         self.check_threat = True
+                        self.check_threat_distance = self.scan_distaces[self.directions['Left']]
                         return 1
                     else:
                         # if self.check_threat is False:
                         self.final_action = self.actions['Right']
                         self.previous_explore_turn = self.final_action
                         self.check_threat = True
+                        self.check_threat_distance = self.scan_distaces[self.directions['Right']]
                         print('exp:turn right')
                         return 1
-                
+                        
                 if diff_back == 0: # back side distance has not changed... this means an enemy is following
                     self.final_action = self.actions['LookBack']
                     self.previous_explore_turn = self.final_action
+                    self.check_threat_distance = self.scan_distaces[self.directions['Back']]
                     self.check_threat = True
                     print('exp: turn back')
                     return 1
             else:
-                self.check_threat = False
+                print('Threat check = ',self.check_threat)
+                if self.check_threat_distance != self.scan_distaces[self.directions['Front']]:
+                    self.final_action = self.actions['Forward']
+                    self.check_threat = False
+                    return 1
                 if self.previous_explore_turn == self.actions['LookBack']:
                     self.final_action = self.actions['LookBack']
                     print('exp check threat:look back')    
+                    self.check_threat = False
                     return 1
                 if self.previous_explore_turn == self.actions['Left']:
+                    self.check_threat = False
                     self.final_action = self.actions['Right']
                     print('exp check threat:turn right')    
                     self.just_explored = True
                     return 1
                 elif self.previous_explore_turn == self.actions['Right']:
+                    self.check_threat = False
                     self.final_action = self.actions['Right']
                     print('exp check threat:turn right')    
                     self.just_explored = True
