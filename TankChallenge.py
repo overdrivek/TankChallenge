@@ -11,6 +11,8 @@ class Actions:
         self.previous_explore_turn = self.actions['Forward']
         self.check_threat = False
         self.check_threat_distance = -1
+        self.surveillance = False
+        self.surveil_counter = 0
         
     def update(self,scan_distaces,previous_distance):
         self.scan_distaces = scan_distaces
@@ -79,7 +81,36 @@ class Actions:
         if self.just_explored is True: 
             print('just explored...so skipping')
             return  0
-
+        
+        if self.surveillance is True: 
+            print('Surveillance....')
+            difference = [self.previous_distance[self.directions['Left']] - self.scan_distaces[self.directions['Left']], self.previous_distance[self.directions['Right']] - self.scan_distaces[self.directions['Right']]]
+            min_val = 100
+            min_direction = 0
+            print('Difference ', difference)
+            for direction,value in enumerate(difference):
+                if value != 0 and value < min_val:
+                    min_val = value
+                    min_direction = direction
+            if min_direction == 0:
+                self.final_action = self.actions['Left']
+            elif min_direction == 1:
+                self.final_action = self.actions['Right']
+            else: 
+                self.surveil_counter = 0
+                self.surveillance = False
+                print('Ending surveillance')
+                return 0
+            
+            if self.surveil_counter> 3: 
+                self.surveil_counter = 0
+                self.surveillance = False
+                print('Ending surveillance')
+            
+            self.surveil_counter += 1 
+            
+            return 1
+        
         if self.previous_distance is not None: 
             if self.check_threat is False:    
                 difference = [previous_distance - scan_distaces for previous_distance,scan_distaces in zip(self.previous_distance,self.scan_distaces)]
@@ -99,7 +130,7 @@ class Actions:
                         min_direction = i
                 print('min direction ',min_direction) 
                 print('diff_sides[min_direction] = ',diff_sides[min_direction])
-                if diff_sides[min_direction] > -2 and diff_sides[min_direction] != 0: #or diff_sides[min_direction] > -2: # a shortening of distance has took place or # a slight enlargement has happened...found a corridor?
+                if diff_sides[min_direction] > -3 and diff_sides[min_direction] != 0: #or diff_sides[min_direction] > -2: # a shortening of distance has took place or # a slight enlargement has happened...found a corridor?
                     if min_direction == 0:
                         self.final_action = self.actions['Left']
                         print('exp:turn left')
@@ -128,6 +159,7 @@ class Actions:
                 if self.check_threat_distance != self.scan_distaces[self.directions['Front']]:
                     self.final_action = self.actions['Forward']
                     self.check_threat = False
+                    self.surveillance = True
                     return 1
                 if self.previous_explore_turn == self.actions['LookBack']:
                     self.final_action = self.actions['LookBack']
