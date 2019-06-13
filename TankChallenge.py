@@ -13,6 +13,9 @@ class Actions:
         self.check_threat_distance = -1
         self.surveillance = False
         self.surveil_counter = 0
+        self.start = 1
+        self.just_fired = False
+        self.gap_found = 0
         
     def update(self,scan_distaces,previous_distance):
         self.scan_distaces = scan_distaces
@@ -20,31 +23,54 @@ class Actions:
         self.previous_distance = previous_distance
         # else:
         #     self.wait_count = 1
-        print('Scan distance',self.scan_distaces)
-        print('Previous distance',self.previous_distance)
+        print('Scan distances:')
+        print('          {} ({})'.format(self.scan_distaces[self.directions['Front']],self.previous_distance[self.directions['Front']]))
+        print('{}({})       o             {}({})'.format(self.scan_distaces[self.directions['Left']],self.previous_distance[self.directions['Left']],self.scan_distaces[self.directions['Right']],self.previous_distance[self.directions['Right']]))
+        print('          {}({})'.format(self.scan_distaces[self.directions['Back']],self.previous_distance[self.directions['Back']]))
+        
+        #print('Previous distance',self.previous_distance)
         
     def ActionFire(self):
         if api.identify_target() is True: 
             self.final_action = self.actions['Fire']
             self.just_explored = False
-            print('Fire')
+            print('Target identified --- Fire')
+            self.just_fired = True
             return 1
         else:
-            print('Fire : ',0)
-            return 0
+            if self.just_fired is True: 
+                print('On Alert..Just fired.')
+                min_val = 30
+                min_direction = -1
+                for direction,value in enumerate(self.scan_distaces):
+                    if value < min_val and direction != 0:
+                        min_val = value
+                        min_direction = direction
+                print(min_direction)
+                if min_direction == -1:
+                    self.just_fired = False
+                    return 0 
+                
+                if min_direction == 1:
+                    self.final_action = self.actions['Left']
+                elif min_direction == 2: 
+                    self.final_action = self.actions['LookBack']
+                elif min_direction == 3:
+                    self.final_action = self.actions['Right']
+                self.just_fired = False
+                return 1
+        return 0
     
     def ActionLeft(self):
         if self.scan_distaces[self.directions['Front']] <= 1:
             if self.scan_distaces[self.directions['Left']] - self.scan_distaces[self.directions['Right']] > 0:
                 self.final_action = self.actions['Left']
                 self.just_explored = True
-                print('Turn Left')
+                print('Action Left: left > right, front <= 1; Turn Left')
                 return 1
             else:
-                print('Left : ',0)
                 return 0
         else:
-            print('Left : ',0)
             return 0
             
     def ActionRight(self):
@@ -52,55 +78,65 @@ class Actions:
             if self.scan_distaces[self.directions['Left']] - self.scan_distaces[self.directions['Right']] < 0:
                 self.final_action = self.actions['Right']
                 self.just_explored = True
-                print('Turn Right')
+                print('Action Right: left < right, front <= 1; Turn Right')
                 return 1
             else:
-                print('Right : ',0)
                 return 0
         else:
-            print('Right : ',0)
             return 0
                 
     def ActionForwards(self):
         if self.scan_distaces[self.directions['Front']] > 1:
-            print(self.scan_distaces)
             self.final_action = self.actions['Forward']
             self.just_explored = False
-            print('Go Forward')
+            print('Action Forward: Front > 1; Go Forwards')
             return 1 
         else:
-            print('Forward : ',0)
             return 0
             
     def ActionBackwards(self):
         self.final_action = self.actions['Back']
         self.just_explored = False
-        print('Go Backward')
+        print('Action Backwards: Go Backward')
     
     def ActionExplore(self):
         if self.just_explored is True: 
-            print('just explored...so skipping')
+            print('Action Explore: just explored...so skipping')
             return  0
         
         if self.surveillance is True: 
-            print('Surveillance....')
-            difference = [self.previous_distance[self.directions['Left']] - self.scan_distaces[self.directions['Left']], self.previous_distance[self.directions['Right']] - self.scan_distaces[self.directions['Right']]]
-            min_val = 100
-            min_direction = 0
-            print('Difference ', difference)
-            for direction,value in enumerate(difference):
-                if value != 0 and value < min_val:
-                    min_val = value
-                    min_direction = direction
-            if min_direction == 0:
-                self.final_action = self.actions['Left']
-            elif min_direction == 1:
-                self.final_action = self.actions['Right']
+            print('Action Explore: Surveillance....')
+            hreturn = 0
+            if self.scan_distaces[self.directions['Front']]> 8:
+                self.final_action = self.actions['Forward']
+                print('Action Explore: Go Straight')
+                self.surveil_counter += 1 
+                return 1
             else: 
-                self.surveil_counter = 0
-                self.surveillance = False
-                print('Ending surveillance')
-                return 0
+                difference = [self.previous_distance[self.directions['Left']] - self.scan_distaces[self.directions['Left']], self.previous_distance[self.directions['Right']] - self.scan_distaces[self.directions['Right']]]
+                min_val = 100
+                min_direction = -1
+                
+                print('Distance change [Left, Right] : ', difference)
+                for direction,value in enumerate(difference):
+                    if value != 0 and value < min_val:
+                        min_val = value
+                        min_direction = direction
+                print('Minimum direction : ',min_direction)
+                if min_direction == 0:
+                    self.final_action = self.actions['Left']
+                    print('Action Explore: Turn Left')
+                    self.surveil_counter += 1 
+                    return 1
+                elif min_direction == 1:
+                    self.final_action = self.actions['Right']
+                    print('Action Explore: Turn Right')
+                    self.surveil_counter += 1 
+                    return 1
+                else: 
+                    self.surveil_counter = 0
+                    self.surveillance = False
+                    print('Ending surveillance')
             
             if self.surveil_counter> 3: 
                 self.surveil_counter = 0
@@ -109,11 +145,12 @@ class Actions:
             
             self.surveil_counter += 1 
             
-            return 1
         
         if self.previous_distance is not None: 
-            if self.check_threat is False:    
+            print('Check Threat :',self.check_threat)
+            if self.check_threat is False:
                 difference = [previous_distance - scan_distaces for previous_distance,scan_distaces in zip(self.previous_distance,self.scan_distaces)]
+                
                 diff_sides = []
                 diff_back = -1
                 for i in range(len(difference)):
@@ -122,40 +159,70 @@ class Actions:
                     if i==2:
                         diff_back = difference[i]
                         
-                print(diff_sides)
-                min_direction = 0
+                print('Distance change [Left, Right]',diff_sides)
+                
+                min_direction = -1
                 max_value = 30
                 for i,side in enumerate(diff_sides):
-                    if side<max_value and side > 0:
+                    if side<max_value and side != 0:
                         min_direction = i
-                print('min direction ',min_direction) 
-                print('diff_sides[min_direction] = ',diff_sides[min_direction])
-                if diff_sides[min_direction] > -3 and diff_sides[min_direction] != 0: #or diff_sides[min_direction] > -2: # a shortening of distance has took place or # a slight enlargement has happened...found a corridor?
-                    if min_direction == 0:
-                        self.final_action = self.actions['Left']
-                        print('exp:turn left')
-                        self.previous_explore_turn = self.final_action
-                        self.check_threat = True
-                        self.check_threat_distance = self.scan_distaces[self.directions['Left']]
-                        return 1
-                    else:
-                        # if self.check_threat is False:
-                        self.final_action = self.actions['Right']
-                        self.previous_explore_turn = self.final_action
-                        self.check_threat = True
-                        self.check_threat_distance = self.scan_distaces[self.directions['Right']]
-                        print('exp:turn right')
-                        return 1
+                        #max_value = side
+                print('Minimum direction ',min_direction)
+                self.gap_found = max([abs(side) for side in diff_sides])
+                print('Gap found = ',self.gap_found)
+                if min_direction != -1:
+                    #if diff_sides[min_direction] > -3 and diff_sides[min_direction] != 0: #or diff_sides[min_direction] > -2: # a shortening of distance has took place or # a slight enlargement has happened...found a corridor?
+                    if diff_sides[min_direction] != 0:
                         
+                        if min_direction == 0:
+                            self.final_action = self.actions['Left']
+                            print('Action Explore : Turn Left')
+                            self.previous_explore_turn = self.final_action
+                            self.check_threat = True
+                            if self.scan_distaces[self.directions['Front']]<3:
+                                self.check_threat = False
+                                self.just_explored = True
+                            
+                            self.check_threat_distance = self.scan_distaces[self.directions['Left']]
+                            print('Updated check threat is {} with check threat distance = {}'.format(self.check_threat,self.check_threat_distance))
+                            if self.gap_found > 8:
+                                # go to surveillance mode
+                                self.surveillance = True
+                                self.just_explored = False
+                            self.gap_found = 0
+                            return 1
+                        else:
+                            # if self.check_threat is False:
+                            self.final_action = self.actions['Right']
+                            self.previous_explore_turn = self.final_action
+                            self.check_threat = True
+                            if self.scan_distaces[self.directions['Front']]<3:
+                                self.check_threat = False
+                                self.just_explored = True
+                            self.check_threat_distance = self.scan_distaces[self.directions['Right']]
+                            print('Updated check threat :',self.check_threat)
+                            print('Updated check threat is {} with check threat distance = {}'.format(self.check_threat,self.check_threat_distance))
+                            print('Action Explore : Turn Right')
+                            if self.gap_found > 8:
+                                # go to surveillance mode
+                                self.surveillance = True
+                                self.just_explored = False
+                            self.gap_found = 0
+                            return 1
+                print('Difference Back ',diff_back)  
                 if diff_back == 0: # back side distance has not changed... this means an enemy is following
+                    print('Persuming Followed...')
                     self.final_action = self.actions['LookBack']
                     self.previous_explore_turn = self.final_action
                     self.check_threat_distance = self.scan_distaces[self.directions['Back']]
                     self.check_threat = True
-                    print('exp: turn back')
+                    print('Action Explore: Turn Back')
                     return 1
+                
+                return 0
+                
             else:
-                print('Threat check = ',self.check_threat)
+                print('Check threat distance is {} and front distance is {}'.format(self.check_threat_distance,self.scan_distaces[self.directions['Front']]))
                 if self.check_threat_distance != self.scan_distaces[self.directions['Front']]:
                     self.final_action = self.actions['Forward']
                     self.check_threat = False
@@ -174,17 +241,22 @@ class Actions:
                     return 1
                 elif self.previous_explore_turn == self.actions['Right']:
                     self.check_threat = False
-                    self.final_action = self.actions['Right']
-                    print('exp check threat:turn right')    
+                    self.final_action = self.actions['Left']
+                    print('exp check threat:turn left')    
                     self.just_explored = True
                     return 1
-            print('Explore : ',0)
+            #print('Explore : ',0)
             return 0
     
     
     def Coordinate(self):
         print('Coordination....')
+        print('Fuel : ', api.current_fuel())
         self.final_action = self.actions['Forward']
+        if self.start == 1:
+            print('Start motion')
+            self.start = 0
+            return
         hreturn = self.ActionFire()
         if hreturn == 0: # nothing happened
             hreturn = self.ActionExplore()
